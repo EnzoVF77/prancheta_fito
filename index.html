@@ -1,0 +1,1783 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full w-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="description" content="Prancheta Tática de Futebol Interativa Vertical PWA Offline">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Prancheta Fito FC</title>
+    
+    <!-- Tailwind CSS (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        pitch: '#1b4d24',
+                        pitchDark: '#143b1b',
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* Previne rolagem da página e gestos durante o toque/arraste */
+        html, body {
+            touch-action: none;
+            overscroll-behavior: none;
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        /* Container do Campo Vertical */
+        .pitch-wrapper {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            padding: 6px;
+            box-sizing: border-box;
+        }
+
+        .pitch-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: calc((100vh - 130px) * 0.68);
+            max-height: calc(100vw * 1.47);
+            aspect-ratio: 2 / 3;
+            background: radial-gradient(circle, #235d2c 0%, #123317 100%);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), inset 0 0 20px rgba(0, 0, 0, 0.5);
+            border: 3px solid #334155;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        /* Listras da Grama */
+        .pitch-stripes {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            pointer-events: none;
+            opacity: 0.15;
+        }
+        .pitch-stripe {
+            flex: 1;
+            width: 100%;
+        }
+        .pitch-stripe:nth-child(even) {
+            background-color: #ffffff;
+        }
+
+        /* Tokens de Jogadores e Bola */
+        .tactical-token {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            touch-action: none;
+            cursor: grab;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            will-change: left, top;
+        }
+
+        .tactical-token:active {
+            cursor: grabbing;
+            z-index: 15;
+        }
+
+        .token-circle {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 13px;
+            color: #ffffff;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.6), inset 0 2px 4px rgba(255,255,255,0.4);
+            border: 2px solid #ffffff;
+        }
+
+        .token-label {
+            font-size: 9px;
+            font-weight: 700;
+            background: rgba(15, 23, 42, 0.9);
+            color: #ffffff;
+            padding: 1px 5px;
+            border-radius: 4px;
+            margin-top: 2px;
+            white-space: nowrap;
+            max-width: 75px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            pointer-events: none;
+        }
+
+        .ball-token .token-circle {
+            width: 22px;
+            height: 22px;
+            background: radial-gradient(circle at 30% 30%, #ffffff 0%, #cbd5e1 70%, #334155 100%);
+            border: 1px solid #000000;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.6);
+        }
+
+        .btn-touch {
+            min-height: 44px;
+            min-width: 44px;
+        }
+
+        .modal-interactive {
+            touch-action: auto !important;
+            user-select: text !important;
+            -webkit-user-select: text !important;
+        }
+
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 flex flex-col h-full w-full overflow-hidden">
+
+    <!-- CABEÇALHO -->
+    <header class="bg-slate-800 border-b border-slate-700 px-3 py-2 flex items-center justify-between z-30 shrink-0">
+        <div class="flex items-center space-x-2">
+            <i class="fa-solid fa-clipboard-user text-emerald-400 text-xl"></i>
+            <div>
+                <h1 class="font-bold text-sm md:text-base leading-tight">Prancheta Fito FC</h1>
+                <p class="text-[10px] text-slate-400 hidden sm:block">Campo Vertical PWA</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-2 relative">
+            <select id="select-pitch-type" class="bg-slate-700 text-xs text-slate-200 border border-slate-600 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <option value="full">Campo Completo</option>
+                <option value="half">Meio Campo</option>
+            </select>
+
+            <button id="btn-pwa-install" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-2.5 py-1.5 rounded-lg font-medium transition flex items-center gap-1 btn-touch">
+                <i class="fa-solid fa-download"></i> <span class="hidden md:inline">Instalar</span>
+            </button>
+
+            <button id="btn-open-export" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-2.5 py-1.5 rounded-lg transition flex items-center gap-1 btn-touch">
+                <i class="fa-solid fa-share-nodes"></i> <span class="hidden sm:inline">Exportar</span>
+            </button>
+
+            <button id="btn-options-menu" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-3 py-1.5 rounded-lg transition flex items-center justify-center btn-touch" title="Opções de Salvamento">
+                <i class="fa-solid fa-ellipsis-vertical text-base"></i>
+            </button>
+
+            <div id="dropdown-options" class="hidden absolute right-0 top-12 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 py-1 modal-interactive">
+                <button id="btn-menu-save-board" class="w-full text-left px-4 py-2.5 text-xs text-slate-200 hover:bg-slate-700 flex items-center gap-2 transition">
+                    <i class="fa-solid fa-floppy-disk text-emerald-400"></i> Salvar Quadro Atual
+                </button>
+                <button id="btn-menu-view-saved" class="w-full text-left px-4 py-2.5 text-xs text-slate-200 hover:bg-slate-700 flex items-center gap-2 transition border-t border-slate-700/60">
+                    <i class="fa-solid fa-folder-open text-amber-400"></i> Quadros Salvos
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ÁREA PRINCIPAL -->
+    <div class="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+
+        <aside id="sidebar-left" class="w-full lg:w-80 bg-slate-800 border-r border-slate-700 flex flex-col z-50 shrink-0 lg:static fixed inset-x-0 bottom-0 top-12 transform translate-y-full lg:translate-y-0 transition-transform duration-300 ease-in-out shadow-2xl">
+            
+            <div class="flex lg:hidden items-center justify-between px-3 py-2 bg-slate-850 border-b border-slate-700">
+                <span class="text-xs font-bold text-slate-300 flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-emerald-400"></i> Menu de Ferramentas
+                </span>
+                <button id="btn-close-mobile-panel" class="text-slate-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div class="flex border-b border-slate-700 bg-slate-850">
+                <button data-tab="squad" class="tab-btn flex-1 py-3 text-xs font-semibold text-center border-b-2 bg-emerald-600 text-white border-emerald-500 flex items-center justify-center gap-1.5 btn-touch">
+                    <i class="fa-solid fa-users"></i> Elenco
+                </button>
+                <button data-tab="tactics" class="tab-btn flex-1 py-3 text-xs font-semibold text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5 btn-touch">
+                    <i class="fa-solid fa-sitemap"></i> Formações
+                </button>
+                <button data-tab="draw" class="tab-btn flex-1 py-3 text-xs font-semibold text-center border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5 btn-touch">
+                    <i class="fa-solid fa-paintbrush"></i> Desenho
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-3 space-y-4 bg-slate-800">
+
+                <!-- ABA 1: ELENCO -->
+                <div id="tab-squad" class="tab-content space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Jogadores Cadastrados</h3>
+                        <button id="btn-add-player" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-2.5 py-1.5 rounded-md font-medium transition flex items-center gap-1 btn-touch">
+                            <i class="fa-solid fa-plus"></i> Novo
+                        </button>
+                    </div>
+
+                    <div>
+                        <span class="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider block mb-1.5">Em Campo / Titulares (<span id="count-field">0</span>)</span>
+                        <div id="field-players-list" class="space-y-1 max-h-48 overflow-y-auto pr-1"></div>
+                    </div>
+
+                    <div>
+                        <span class="text-[11px] font-semibold text-amber-400 uppercase tracking-wider block mb-1.5">Banco de Reservas (<span id="count-bench">0</span>)</span>
+                        <div id="bench-players-list" class="space-y-1 max-h-48 overflow-y-auto pr-1"></div>
+                    </div>
+                </div>
+
+                <!-- ABA 2: FORMAÇÕES -->
+                <div id="tab-tactics" class="tab-content hidden space-y-4">
+                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Sistema de Formações</h3>
+
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider block">1. Quantidade de Jogadores por Time</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button class="btn-squad-size bg-emerald-600 text-white text-xs py-2 px-2.5 rounded-lg border border-emerald-500 font-bold text-left flex items-center justify-between btn-touch" data-size="11">
+                                <span>11v11 (Campo)</span>
+                                <i class="fa-solid fa-check text-xs opacity-100 icon-check"></i>
+                            </button>
+                            <button class="btn-squad-size bg-slate-700 text-slate-300 hover:bg-slate-650 text-xs py-2 px-2.5 rounded-lg border border-slate-600 font-bold text-left flex items-center justify-between btn-touch" data-size="8">
+                                <span>8v8 (Society)</span>
+                                <i class="fa-solid fa-check text-xs opacity-0 icon-check"></i>
+                            </button>
+                            <button class="btn-squad-size bg-slate-700 text-slate-300 hover:bg-slate-650 text-xs py-2 px-2.5 rounded-lg border border-slate-600 font-bold text-left flex items-center justify-between btn-touch" data-size="7">
+                                <span>7v7 (Society)</span>
+                                <i class="fa-solid fa-check text-xs opacity-0 icon-check"></i>
+                            </button>
+                            <button class="btn-squad-size bg-slate-700 text-slate-300 hover:bg-slate-650 text-xs py-2 px-2.5 rounded-lg border border-slate-600 font-bold text-left flex items-center justify-between btn-touch" data-size="6">
+                                <span>6v6 (Society)</span>
+                                <i class="fa-solid fa-check text-xs opacity-0 icon-check"></i>
+                            </button>
+                            <button class="btn-squad-size bg-slate-700 text-slate-300 hover:bg-slate-650 text-xs py-2 px-2.5 rounded-lg border border-slate-600 font-bold text-left flex items-center justify-between btn-touch col-span-2" data-size="5">
+                                <span>5v5 (Futsal)</span>
+                                <i class="fa-solid fa-check text-xs opacity-0 icon-check"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5 pt-1">
+                        <label class="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider block">2. Táticas Disponíveis (<span id="txt-current-size">11 Jogadores</span>)</label>
+                        <div id="preset-buttons-container" class="grid grid-cols-2 gap-2"></div>
+                    </div>
+
+                    <hr class="border-slate-700 my-2">
+
+                    <button id="btn-reset-ball" class="w-full bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs py-2.5 rounded-lg border border-slate-600 flex items-center justify-center gap-2 btn-touch">
+                        <i class="fa-solid fa-futbol"></i> Centralizar Bola
+                    </button>
+                </div>
+
+                <!-- ABA 3: DESENHO TÁTICO -->
+                <div id="tab-draw" class="tab-content hidden space-y-3">
+                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Anotações & Linhas</h3>
+                    
+                    <div>
+                        <label class="text-[11px] text-slate-400 block mb-1">Ferramenta Ativa:</label>
+                        <div class="grid grid-cols-3 gap-1.5">
+                            <button class="btn-draw-tool bg-emerald-600 text-white text-xs py-2 rounded-md font-medium border border-slate-600 flex flex-col items-center gap-1 btn-touch" data-tool="none">
+                                <i class="fa-solid fa-hand"></i> Mover
+                            </button>
+                            <button class="btn-draw-tool bg-slate-700 text-slate-300 text-xs py-2 rounded-md font-medium border border-slate-600 flex flex-col items-center gap-1 btn-touch" data-tool="arrow">
+                                <i class="fa-solid fa-arrow-up"></i> Seta
+                            </button>
+                            <button class="btn-draw-tool bg-slate-700 text-slate-300 text-xs py-2 rounded-md font-medium border border-slate-600 flex flex-col items-center gap-1 btn-touch" data-tool="line">
+                                <i class="fa-solid fa-minus"></i> Passe
+                            </button>
+                            <button class="btn-draw-tool bg-slate-700 text-slate-300 text-xs py-2 rounded-md font-medium border border-slate-600 flex flex-col items-center gap-1 btn-touch" data-tool="brush">
+                                <i class="fa-solid fa-pen"></i> Pincel
+                            </button>
+                            <button class="btn-draw-tool bg-slate-700 text-slate-300 text-xs py-2 rounded-md font-medium border border-slate-600 flex flex-col items-center gap-1 btn-touch" data-tool="rect">
+                                <i class="fa-regular fa-square"></i> Zona
+                            </button>
+                            <button class="btn-draw-tool bg-slate-700 text-slate-300 text-xs py-2 rounded-md font-medium border border-slate-600 flex flex-col items-center gap-1 btn-touch" data-tool="circle">
+                                <i class="fa-regular fa-circle"></i> Círculo
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="text-[11px] text-slate-400 block mb-1">Cor do Desenho:</label>
+                        <div class="flex items-center space-x-3">
+                            <button class="btn-color-pick w-8 h-8 rounded-full bg-yellow-400 ring-2 ring-white" data-color="#facc15"></button>
+                            <button class="btn-color-pick w-8 h-8 rounded-full bg-red-500" data-color="#ef4444"></button>
+                            <button class="btn-color-pick w-8 h-8 rounded-full bg-blue-500" data-color="#3b82f6"></button>
+                            <button class="btn-color-pick w-8 h-8 rounded-full bg-white" data-color="#ffffff"></button>
+                            <button class="btn-color-pick w-8 h-8 rounded-full bg-black" data-color="#000000"></button>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 pt-2">
+                        <button id="btn-draw-undo" class="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs py-2 rounded-lg border border-slate-600 flex items-center justify-center gap-1 btn-touch">
+                            <i class="fa-solid fa-rotate-left"></i> Desfazer
+                        </button>
+                        <button id="btn-draw-clear" class="flex-1 bg-rose-900/60 hover:bg-rose-800 text-rose-200 text-xs py-2 rounded-lg border border-rose-700/50 flex items-center justify-center gap-1 btn-touch">
+                            <i class="fa-solid fa-trash"></i> Limpar
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </aside>
+
+        <!-- CAMPO VERTICAL PRINCIPAL -->
+        <main class="flex-1 bg-slate-950 p-2 flex flex-col items-center justify-center relative overflow-hidden z-10">
+            <div class="pitch-wrapper">
+                <div id="pitch-container" class="pitch-container">
+                    <div class="pitch-stripes">
+                        <div class="pitch-stripe"></div><div class="pitch-stripe"></div>
+                        <div class="pitch-stripe"></div><div class="pitch-stripe"></div>
+                        <div class="pitch-stripe"></div><div class="pitch-stripe"></div>
+                        <div class="pitch-stripe"></div><div class="pitch-stripe"></div>
+                        <div class="pitch-stripe"></div><div class="pitch-stripe"></div>
+                    </div>
+
+                    <svg id="pitch-svg" viewBox="0 0 100 150" preserveAspectRatio="none" class="absolute inset-0 w-full h-full pointer-events-none z-0"></svg>
+                    <div id="tokens-layer" class="absolute inset-0 w-full h-full pointer-events-auto z-10"></div>
+                    <canvas id="draw-canvas" class="absolute inset-0 w-full h-full pointer-events-none z-0" style="touch-action: none;"></canvas>
+                </div>
+            </div>
+
+            <div class="w-full max-w-sm bg-slate-800 border border-slate-700 rounded-xl mt-1 p-1.5 flex items-center justify-between gap-2 shrink-0 z-20">
+                <div class="flex items-center space-x-1.5">
+                    <button id="btn-anim-play" class="bg-emerald-600 hover:bg-emerald-500 text-white w-9 h-9 rounded-lg flex items-center justify-center transition btn-touch" title="Reproduzir Animação">
+                        <i class="fa-solid fa-play text-xs"></i>
+                    </button>
+                    <button id="btn-anim-add-frame" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-2.5 h-9 rounded-lg border border-slate-600 flex items-center gap-1 btn-touch" title="Criar Novo Quadro">
+                        <i class="fa-solid fa-plus"></i> <span>Quadro</span>
+                    </button>
+                </div>
+
+                <div id="frames-list" class="flex items-center space-x-1 overflow-x-auto py-0.5 px-1 flex-1"></div>
+
+                <div class="text-[11px] text-slate-400 font-mono px-1">
+                    <span id="current-frame-idx" class="text-emerald-400 font-bold">1</span>/<span id="total-frames-idx">1</span>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <nav class="lg:hidden bg-slate-800 border-t border-slate-700 flex justify-around items-center h-12 shrink-0 z-40">
+        <button data-mobile-tab="squad" class="mobile-nav-btn text-emerald-400 flex flex-col items-center justify-center w-full h-full text-[10px] btn-touch">
+            <i class="fa-solid fa-users text-sm"></i>
+            <span>Elenco</span>
+        </button>
+        <button data-mobile-tab="tactics" class="mobile-nav-btn text-slate-400 flex flex-col items-center justify-center w-full h-full text-[10px] btn-touch">
+            <i class="fa-solid fa-sitemap text-sm"></i>
+            <span>Formações</span>
+        </button>
+        <button data-mobile-tab="draw" class="mobile-nav-btn text-slate-400 flex flex-col items-center justify-center w-full h-full text-[10px] btn-touch">
+            <i class="fa-solid fa-paintbrush text-sm"></i>
+            <span>Desenho</span>
+        </button>
+        <button id="btn-mobile-toggle-panel" class="text-slate-400 flex flex-col items-center justify-center w-full h-full text-[10px] btn-touch">
+            <i class="fa-solid fa-sliders text-sm"></i>
+            <span>Painel</span>
+        </button>
+    </nav>
+
+    <!-- MODAIS -->
+    <div id="modal-saved-boards" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] hidden flex items-center justify-center p-3 modal-interactive">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md p-4 shadow-2xl space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-700 pb-2">
+                <h3 class="font-bold text-sm text-slate-100 flex items-center gap-1.5">
+                    <i class="fa-solid fa-folder-open text-amber-400"></i> Quadros e Jogadas Salvas
+                </h3>
+                <button class="btn-close-modal text-slate-400 hover:text-white p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div id="saved-boards-list" class="space-y-2 max-h-60 overflow-y-auto pr-1"></div>
+            <div class="pt-2 text-right">
+                <button class="btn-close-modal bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs px-3 py-2 rounded-lg btn-touch">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-player" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] hidden flex items-center justify-center p-3 modal-interactive">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-sm p-4 shadow-2xl space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-700 pb-2">
+                <h3 class="font-bold text-sm text-slate-100 flex items-center gap-1.5">
+                    <i class="fa-solid fa-user-gear text-emerald-400"></i> Editar / Instruções
+                </h3>
+                <button class="btn-close-modal text-slate-400 hover:text-white p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <form id="form-player" class="space-y-3">
+                <input type="hidden" id="player-id">
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="col-span-2">
+                        <label class="text-[10px] text-slate-400 block mb-0.5">Nome do Jogador</label>
+                        <input type="text" id="player-name" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-slate-100 focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-slate-400 block mb-0.5">Número</label>
+                        <input type="number" id="player-number" min="1" max="99" required class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-100 text-center focus:outline-none focus:border-emerald-500">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-[10px] text-slate-400 block mb-0.5">Posição Tática</label>
+                        <select id="player-role" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-100 focus:outline-none focus:border-emerald-500">
+                            <option value="Goleiro">Goleiro (GK)</option>
+                            <option value="Zagueiro">Zagueiro (CB)</option>
+                            <option value="Lateral">Lateral (SB)</option>
+                            <option value="Volante">Volante (DMF)</option>
+                            <option value="Meio-Campo">Meio-Campo (CMF)</option>
+                            <option value="Meia-Armador">Meia-Armador (AMF)</option>
+                            <option value="Ponta">Ponta (WG)</option>
+                            <option value="Centroavante">Centroavante (CF)</option>
+                            <option value="Fixo">Fixo (Futsal)</option>
+                            <option value="Ala">Ala (Futsal/Society)</option>
+                            <option value="Pivô">Pivô (Futsal/Society)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-slate-400 block mb-0.5">Pé Preferido</label>
+                        <select id="player-foot" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-xs text-slate-100 focus:outline-none focus:border-emerald-500">
+                            <option value="Direito">Direito</option>
+                            <option value="Esquerdo">Esquerdo</option>
+                            <option value="Ambidestro">Ambidestro</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-[10px] text-slate-400 block mb-0.5">Cor da Camisa</label>
+                    <div class="flex items-center space-x-3">
+                        <label class="flex items-center gap-1.5 text-xs cursor-pointer">
+                            <input type="radio" name="team-color" value="#16a34a" checked class="text-green-600"> Verde
+                        </label>
+                        <label class="flex items-center gap-1.5 text-xs cursor-pointer">
+                            <input type="radio" name="team-color" value="#000000" class="text-black"> Preto
+                        </label>
+                        <label class="flex items-center gap-1.5 text-xs cursor-pointer">
+                            <input type="radio" name="team-color" value="#ffffff" class="text-white"> Branco
+                        </label>
+                        <label class="flex items-center gap-1.5 text-xs cursor-pointer">
+                            <input type="radio" name="team-color" value="#78350f" class="text-amber-900"> Marrom
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-[10px] text-slate-400 block mb-0.5">Instruções Táticas Individuais</label>
+                    <textarea id="player-instructions" rows="2" placeholder="Ex: Marca o camisa 10; Sobe apenas quando o time estiver com a bola." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-100 focus:outline-none focus:border-emerald-500"></textarea>
+                </div>
+
+                <div class="flex justify-between items-center pt-2">
+                    <button type="button" id="btn-delete-player" class="bg-rose-900/60 hover:bg-rose-800 text-rose-200 text-xs px-2.5 py-2 rounded-lg border border-rose-700/50 flex items-center gap-1 btn-touch">
+                        <i class="fa-solid fa-trash"></i> Remover
+                    </button>
+                    <div class="flex gap-2">
+                        <button type="button" class="btn-close-modal bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs px-3 py-2 rounded-lg btn-touch">Cancelar</button>
+                        <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-2 rounded-lg font-medium btn-touch">Salvar</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-export" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] hidden flex items-center justify-center p-3 modal-interactive">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-sm p-4 shadow-2xl space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-700 pb-2">
+                <h3 class="font-bold text-sm text-slate-100 flex items-center gap-1.5">
+                    <i class="fa-solid fa-file-export text-emerald-400"></i> Exportar / Importar
+                </h3>
+                <button class="btn-close-modal text-slate-400 hover:text-white p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <div class="space-y-2">
+                <button id="btn-export-png" class="w-full bg-slate-700 hover:bg-slate-600 text-slate-100 p-2.5 rounded-xl border border-slate-600 flex items-center gap-3 transition btn-touch">
+                    <i class="fa-solid fa-image text-emerald-400 text-lg"></i>
+                    <div class="text-left">
+                        <p class="text-xs font-semibold">Salvar Imagem PNG</p>
+                        <p class="text-[10px] text-slate-400">Exporta a prancheta vertical atual</p>
+                    </div>
+                </button>
+
+                <button id="btn-export-json" class="w-full bg-slate-700 hover:bg-slate-600 text-slate-100 p-2.5 rounded-xl border border-slate-600 flex items-center gap-3 transition btn-touch">
+                    <i class="fa-solid fa-code text-blue-400 text-lg"></i>
+                    <div class="text-left">
+                        <p class="text-xs font-semibold">Exportar Backup JSON</p>
+                        <p class="text-[10px] text-slate-400">Salva elenco, táticas e quadros</p>
+                    </div>
+                </button>
+
+                <label class="w-full bg-slate-700 hover:bg-slate-600 text-slate-100 p-2.5 rounded-xl border border-slate-600 flex items-center gap-3 transition cursor-pointer btn-touch">
+                    <i class="fa-solid fa-file-import text-amber-400 text-lg"></i>
+                    <div class="text-left">
+                        <p class="text-xs font-semibold">Importar Arquivo JSON</p>
+                        <p class="text-[10px] text-slate-400">Carrega tática do seu dispositivo</p>
+                    </div>
+                    <input type="file" id="file-import-json" accept=".json" class="hidden">
+                </label>
+            </div>
+
+            <div class="pt-1 text-right">
+                <button class="btn-close-modal bg-slate-700 text-slate-300 text-xs px-3 py-2 rounded-lg btn-touch">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPT PRINCIPAL -->
+    <script>
+        const state = {
+            pitchType: 'full',
+            teamSize: 11,
+            players: [],
+            ball: { x: 50, y: 50 },
+            drawTool: 'none',
+            drawColor: '#facc15',
+            drawings: [],
+            frames: [],
+            currentFrame: 0,
+            isPlaying: false,
+            savedBoards: []
+        };
+
+        const FORMATIONS_DATABASE = {
+            11: {
+                '4-4-2': [
+                    { role: 'Goleiro', x: 50, y: 8, color: '#000000', num: 1 },
+                    { role: 'Lateral', x: 15, y: 22, color: '#16a34a', num: 2 },
+                    { role: 'Zagueiro', x: 38, y: 20, color: '#16a34a', num: 3 },
+                    { role: 'Zagueiro', x: 62, y: 20, color: '#16a34a', num: 4 },
+                    { role: 'Lateral', x: 85, y: 22, color: '#16a34a', num: 6 },
+                    { role: 'Meio-Campo', x: 18, y: 45, color: '#16a34a', num: 7 },
+                    { role: 'Volante', x: 38, y: 40, color: '#16a34a', num: 5 },
+                    { role: 'Volante', x: 62, y: 40, color: '#16a34a', num: 8 },
+                    { role: 'Meio-Campo', x: 82, y: 45, color: '#16a34a', num: 11 },
+                    { role: 'Atacante', x: 38, y: 75, color: '#16a34a', num: 9 },
+                    { role: 'Atacante', x: 62, y: 75, color: '#16a34a', num: 10 }
+                ],
+                '4-3-3': [
+                    { role: 'Goleiro', x: 50, y: 8, color: '#000000', num: 1 },
+                    { role: 'Lateral', x: 15, y: 22, color: '#16a34a', num: 2 },
+                    { role: 'Zagueiro', x: 38, y: 20, color: '#16a34a', num: 3 },
+                    { role: 'Zagueiro', x: 62, y: 20, color: '#16a34a', num: 4 },
+                    { role: 'Lateral', x: 85, y: 22, color: '#16a34a', num: 6 },
+                    { role: 'Volante', x: 50, y: 38, color: '#16a34a', num: 5 },
+                    { role: 'Meio-Campo', x: 32, y: 52, color: '#16a34a', num: 8 },
+                    { role: 'Meio-Campo', x: 68, y: 52, color: '#16a34a', num: 10 },
+                    { role: 'Ponta', x: 18, y: 78, color: '#16a34a', num: 7 },
+                    { role: 'Centroavante', x: 50, y: 82, color: '#16a34a', num: 9 },
+                    { role: 'Ponta', x: 82, y: 78, color: '#16a34a', num: 11 }
+                ],
+                '4-2-3-1': [
+                    { role: 'Goleiro', x: 50, y: 8, color: '#000000', num: 1 },
+                    { role: 'Lateral', x: 15, y: 22, color: '#16a34a', num: 2 },
+                    { role: 'Zagueiro', x: 38, y: 20, color: '#16a34a', num: 3 },
+                    { role: 'Zagueiro', x: 62, y: 20, color: '#16a34a', num: 4 },
+                    { role: 'Lateral', x: 85, y: 22, color: '#16a34a', num: 6 },
+                    { role: 'Volante', x: 38, y: 38, color: '#16a34a', num: 5 },
+                    { role: 'Volante', x: 62, y: 38, color: '#16a34a', num: 8 },
+                    { role: 'Ponta', x: 20, y: 62, color: '#16a34a', num: 7 },
+                    { role: 'Meia-Armador', x: 50, y: 65, color: '#16a34a', num: 10 },
+                    { role: 'Ponta', x: 80, y: 62, color: '#16a34a', num: 11 },
+                    { role: 'Centroavante', x: 50, y: 82, color: '#16a34a', num: 9 }
+                ],
+                '3-5-2': [
+                    { role: 'Goleiro', x: 50, y: 8, color: '#000000', num: 1 },
+                    { role: 'Zagueiro', x: 25, y: 20, color: '#16a34a', num: 3 },
+                    { role: 'Zagueiro', x: 50, y: 18, color: '#16a34a', num: 4 },
+                    { role: 'Zagueiro', x: 75, y: 20, color: '#16a34a', num: 5 },
+                    { role: 'Lateral', x: 12, y: 48, color: '#16a34a', num: 2 },
+                    { role: 'Volante', x: 38, y: 40, color: '#16a34a', num: 6 },
+                    { role: 'Volante', x: 62, y: 40, color: '#16a34a', num: 8 },
+                    { role: 'Lateral', x: 88, y: 48, color: '#16a34a', num: 11 },
+                    { role: 'Meia-Armador', x: 50, y: 62, color: '#16a34a', num: 10 },
+                    { role: 'Atacante', x: 38, y: 78, color: '#16a34a', num: 7 },
+                    { role: 'Atacante', x: 62, y: 78, color: '#16a34a', num: 9 }
+                ],
+                '5-3-2': [
+                    { role: 'Goleiro', x: 50, y: 8, color: '#000000', num: 1 },
+                    { role: 'Lateral', x: 12, y: 22, color: '#16a34a', num: 2 },
+                    { role: 'Zagueiro', x: 32, y: 18, color: '#16a34a', num: 3 },
+                    { role: 'Zagueiro', x: 50, y: 16, color: '#16a34a', num: 4 },
+                    { role: 'Zagueiro', x: 68, y: 18, color: '#16a34a', num: 5 },
+                    { role: 'Lateral', x: 88, y: 22, color: '#16a34a', num: 6 },
+                    { role: 'Meio-Campo', x: 30, y: 45, color: '#16a34a', num: 7 },
+                    { role: 'Volante', x: 50, y: 42, color: '#16a34a', num: 8 },
+                    { role: 'Meio-Campo', x: 70, y: 45, color: '#16a34a', num: 10 },
+                    { role: 'Atacante', x: 38, y: 75, color: '#16a34a', num: 9 },
+                    { role: 'Atacante', x: 62, y: 75, color: '#16a34a', num: 11 }
+                ]
+            },
+            8: {
+                '3-3-1': [
+                    { role: 'Goleiro', x: 50, y: 8, color: '#000000', num: 1 },
+                    { role: 'Zagueiro', x: 22, y: 22, color: '#16a34a', num: 2 },
+                    { role: 'Zagueiro', x: 50, y: 19, color: '#16a34a', num: 3 },
+                    { role: 'Zagueiro', x: 78, y: 22, color: '#16a34a', num: 4 },
+                    { role: 'Ala', x: 18, y: 50, color: '#16a34a', num: 6 },
+                    { role: 'Meio-Campo', x: 50, y: 48, color: '#16a34a', num: 5 },
+                    { role: 'Ala', x: 82, y: 50, color: '#16a34a', num: 8 },
+                    { role: 'Centroavante', x: 50, y: 80, color: '#16a34a', num: 9 }
+                ],
+                '3-2-2': [
+                    { role: 'Goleiro', x: 50, y: 8, color: '#000000', num: 1 },
+                    { role: 'Zagueiro', x: 22, y: 22, color: '#16a34a', num: 2 },
+                    { role: 'Zagueiro', x: 50, y: 19, color: '#16a34a', num: 3 },
+                    { role: 'Zagueiro', x: 78, y: 22, color: '#16a34a', num: 4 },
+                    { role: 'Meio-Campo', x: 32, y: 50, color: '#16a34a', num: 5 },
+                    { role: 'Meio-Campo', x: 68, y: 50, color: '#16a34a', num: 8 },
+                    { role: 'Atacante', x: 35, y: 78, color: '#16a34a', num: 7 },
+                    { role: 'Atacante', x: 65, y: 78, color: '#16a34a', num: 9 }
+                ],
+                '2-4-1': [
+                    { role: 'Goleiro', x: 50, y: 8, color: '#000000', num: 1 },
+                    { role: 'Zagueiro', x: 30, y: 22, color: '#16a34a', num: 2 },
+                    { role: 'Zagueiro', x: 70, y: 22, color: '#16a34a', num: 3 },
+                    { role: 'Ala', x: 15, y: 48, color: '#16a34a', num: 6 },
+                    { role: 'Volante', x: 38, y: 45, color: '#16a34a', num: 5 },
+                    { role: 'Volante', x: 62, y: 45, color: '#16a34a', num: 8 },
+                    { role: 'Ala', x: 85, y: 48, color: '#16a34a', num: 11 },
+                    { role: 'Centroavante', x: 50, y: 80, color: '#16a34a', num: 9 }
+                ],
+                '2-3-2': [
+                    { role: 'Goleiro', x: 50, y: 8, color: '#000000', num: 1 },
+                    { role: 'Zagueiro', x: 30, y: 22, color: '#16a34a', num: 2 },
+                    { role: 'Zagueiro', x: 70, y: 22, color: '#16a34a', num: 3 },
+                    { role: 'Ala', x: 18, y: 48, color: '#16a34a', num: 6 },
+                    { role: 'Meio-Campo', x: 50, y: 48, color: '#16a34a', num: 5 },
+                    { role: 'Ala', x: 82, y: 48, color: '#16a34a', num: 8 },
+                    { role: 'Atacante', x: 35, y: 78, color: '#16a34a', num: 7 },
+                    { role: 'Atacante', x: 65, y: 78, color: '#16a34a', num: 9 }
+                ],
+                '4-2-1': [
+                    { role: 'Goleiro', x: 50, y: 8, color: '#000000', num: 1 },
+                    { role: 'Lateral', x: 15, y: 22, color: '#16a34a', num: 2 },
+                    { role: 'Zagueiro', x: 38, y: 20, color: '#16a34a', num: 3 },
+                    { role: 'Zagueiro', x: 62, y: 20, color: '#16a34a', num: 4 },
+                    { role: 'Lateral', x: 85, y: 22, color: '#16a34a', num: 6 },
+                    { role: 'Volante', x: 35, y: 48, color: '#16a34a', num: 5 },
+                    { role: 'Volante', x: 65, y: 48, color: '#16a34a', num: 8 },
+                    { role: 'Centroavante', x: 50, y: 80, color: '#16a34a', num: 9 }
+                ]
+            },
+            7: {
+                '2-3-1': [
+                    { role: 'Goleiro', x: 50, y: 8, color: '#000000', num: 1 },
+                    { role: 'Zagueiro', x: 30, y: 22, color: '#16a34a', num: 2 },
+                    { role: 'Zagueiro', x: 70, y: 22, color: '#16a34a', num: 3 },
+                    { role: 'Ala', x: 18, y: 50, color: '#16a34a', num: 7 },
+                    { role: 'Meio-Campo', x: 50, y: 48, color: '#16a34a', num: 5 },
+                    { role: 'Ala', x: 82, y: 50, color: '#16a34a', num: 11 },
+                    { role: 'Pivô', x: 50, y: 78, color: '#16a34a', num: 9 }
+                ],
+                '3-2-1': [
+                    { role: 'Goleiro', x: 50, y: 8, color: '#000000', num: 1 },
+                    { role: 'Zagueiro', x: 20, y: 24, color: '#16a34a', num: 2 },
+                    { role: 'Zagueiro', x: 50, y: 20, color: '#16a34a', num: 3 },
+                    { role: 'Zagueiro', x: 80, y: 24, color: '#16a34a', num: 4 },
+                    { role: 'Meio-Campo', x: 35, y: 52, color: '#16a34a', num: 7 },
+                    { role: 'Meio-Campo', x: 65, y: 52, color: '#16a34a', num: 10 },
+                    { role: 'Pivô', x: 50, y: 80, color: '#16a34a', num: 9 }
+                ],
+                '2-2-2': [
+                    { role: 'Goleiro', x: 50, y: 8, color: '#000000', num: 1 },
+                    { role: 'Zagueiro', x: 30, y: 22, color: '#16a34a', num: 2 },
+                    { role: 'Zagueiro', x: 70, y: 22, color: '#16a34a', num: 3 },
+                    { role: 'Meio-Campo', x: 30, y: 50, color: '#16a34a', num: 7 },
+                    { role: 'Meio-Campo', x: 70, y: 50, color: '#16a34a', num: 8 },
+                    { role: 'Atacante', x: 35, y: 78, color: '#16a34a', num: 9 },
+                    { role: 'Atacante', x: 65, y: 78, color: '#16a34a', num: 10 }
+                ]
+            },
+            6: {
+                '2-2-1': [
+                    { role: 'Goleiro', x: 50, y: 8, color: '#000000', num: 1 },
+                    { role: 'Zagueiro', x: 30, y: 24, color: '#16a34a', num: 2 },
+                    { role: 'Zagueiro', x: 70, y: 24, color: '#16a34a', num: 3 },
+                    { role: 'Ala', x: 25, y: 52, color: '#16a34a', num: 7 },
+                    { role: 'Ala', x: 75, y: 52, color: '#16a34a', num: 11 },
+                    { role: 'Pivô', x: 50, y: 80, color: '#16a34a', num: 9 }
+                ],
+                '2-1-2': [
+                    { role: 'Goleiro', x: 50, y: 8, color: '#000000', num: 1 },
+                    { role: 'Zagueiro', x: 30, y: 24, color: '#16a34a', num: 2 },
+                    { role: 'Zagueiro', x: 70, y: 24, color: '#16a34a', num: 3 },
+                    { role: 'Meio-Campo', x: 50, y: 48, color: '#16a34a', num: 5 },
+                    { role: 'Atacante', x: 32, y: 78, color: '#16a34a', num: 9 },
+                    { role: 'Atacante', x: 68, y: 78, color: '#16a34a', num: 10 }
+                ],
+                '1-3-1': [
+                    { role: 'Goleiro', x: 50, y: 8, color: '#000000', num: 1 },
+                    { role: 'Fixo', x: 50, y: 25, color: '#16a34a', num: 2 },
+                    { role: 'Ala', x: 18, y: 50, color: '#16a34a', num: 7 },
+                    { role: 'Meio-Campo', x: 50, y: 52, color: '#16a34a', num: 5 },
+                    { role: 'Ala', x: 82, y: 50, color: '#16a34a', num: 11 },
+                    { role: 'Pivô', x: 50, y: 80, color: '#16a34a', num: 9 }
+                ]
+            },
+            5: {
+                '1-2-1 (Diamante)': [
+                    { role: 'Goleiro', x: 50, y: 8, color: '#000000', num: 1 },
+                    { role: 'Fixo', x: 50, y: 28, color: '#16a34a', num: 2 },
+                    { role: 'Ala', x: 20, y: 52, color: '#16a34a', num: 7 },
+                    { role: 'Ala', x: 80, y: 52, color: '#16a34a', num: 8 },
+                    { role: 'Pivô', x: 50, y: 80, color: '#16a34a', num: 9 }
+                ],
+                '2-2 (Quadrado)': [
+                    { role: 'Goleiro', x: 50, y: 8, color: '#000000', num: 1 },
+                    { role: 'Fixo', x: 30, y: 30, color: '#16a34a', num: 2 },
+                    { role: 'Fixo', x: 70, y: 30, color: '#16a34a', num: 3 },
+                    { role: 'Pivô', x: 30, y: 75, color: '#16a34a', num: 9 },
+                    { role: 'Pivô', x: 70, y: 75, color: '#16a34a', num: 10 }
+                ],
+                '3-1': [
+                    { role: 'Goleiro', x: 50, y: 8, color: '#000000', num: 1 },
+                    { role: 'Ala', x: 22, y: 32, color: '#16a34a', num: 2 },
+                    { role: 'Fixo', x: 50, y: 25, color: '#16a34a', num: 3 },
+                    { role: 'Ala', x: 78, y: 32, color: '#16a34a', num: 4 },
+                    { role: 'Pivô', x: 50, y: 80, color: '#16a34a', num: 9 }
+                ]
+            }
+        };
+
+        const pitchContainer = document.getElementById('pitch-container');
+        const pitchSvg = document.getElementById('pitch-svg');
+        const drawCanvas = document.getElementById('draw-canvas');
+        const ctx = drawCanvas.getContext('2d');
+        const tokensLayer = document.getElementById('tokens-layer');
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFromStorage();
+            renderPitchSVG();
+            setupCanvasSize();
+            setupEventListeners();
+            setupDrawingLayer();
+
+            if (state.players.length === 0) {
+                setTeamSize(11, '4-4-2');
+            } else {
+                updatePresetButtonsUI();
+                renderTokens();
+                renderSquadLists();
+            }
+
+            if (state.frames.length === 0) {
+                saveCurrentAsFrame();
+            } else {
+                renderFramesUI();
+            }
+
+            updateDrawingToolsUI();
+
+            const resizeObserver = new ResizeObserver(() => {
+                setupCanvasSize();
+                redrawAllCanvas();
+            });
+            resizeObserver.observe(pitchContainer);
+
+            registerPWA();
+        });
+
+        function setupCanvasSize() {
+            const rect = pitchContainer.getBoundingClientRect();
+            drawCanvas.width = rect.width;
+            drawCanvas.height = rect.height;
+        }
+
+        function renderPitchSVG() {
+            const isHalf = state.pitchType === 'half';
+            const stroke = "rgba(255, 255, 255, 0.85)";
+            const strokeWidth = "1.5";
+
+            let svg = `<rect x="2" y="2" width="96" height="146" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}" rx="1"/>`;
+
+            if (!isHalf) {
+                svg += `
+                    <line x1="2" y1="75" x2="98" y2="75" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                    <circle cx="50" cy="75" r="16" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                    <circle cx="50" cy="75" r="1.5" fill="${stroke}"/>
+                    <rect x="40" y="0" width="20" height="2" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                    <rect x="20" y="2" width="60" height="22" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                    <rect x="35" y="2" width="30" height="8" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                    <circle cx="50" cy="16" r="1.5" fill="${stroke}"/>
+                    <path d="M 38 24 A 16 16 0 0 0 62 24" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                    <rect x="40" y="148" width="20" height="2" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                    <rect x="20" y="126" width="60" height="22" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                    <rect x="35" y="140" width="30" height="8" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                    <circle cx="50" cy="134" r="1.5" fill="${stroke}"/>
+                    <path d="M 38 126 A 16 16 0 0 1 62 126" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                    <path d="M 2 6 A 4 4 0 0 0 6 2" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                    <path d="M 94 2 A 4 4 0 0 0 98 6" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                    <path d="M 2 144 A 4 4 0 0 1 6 148" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                    <path d="M 94 148 A 4 4 0 0 1 98 144" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                `;
+            } else {
+                svg += `
+                    <rect x="40" y="0" width="20" height="2" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                    <rect x="20" y="2" width="60" height="35" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                    <rect x="35" y="2" width="30" height="12" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                    <circle cx="50" cy="24" r="1.5" fill="${stroke}"/>
+                    <path d="M 35 37 A 16 16 0 0 0 65 37" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                    <line x1="2" y1="148" x2="98" y2="148" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                    <circle cx="50" cy="148" r="22" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"/>
+                `;
+            }
+
+            pitchSvg.innerHTML = svg;
+        }
+
+        function renderTokens() {
+            tokensLayer.innerHTML = '';
+
+            state.players.filter(p => p.onField).forEach(player => {
+                const token = document.createElement('div');
+                token.className = 'tactical-token';
+                token.dataset.id = player.id;
+                token.style.left = `${player.x}%`;
+                token.style.top = `${player.y}%`;
+
+                token.innerHTML = `
+                    <div class="token-circle" style="background-color: ${player.color || '#16a34a'};">
+                        ${player.number}
+                    </div>
+                    <div class="token-label">${player.name}</div>
+                `;
+
+                setupDragEvents(token, player.id, 'player');
+                token.addEventListener('dblclick', (e) => {
+                    e.stopPropagation();
+                    openPlayerModal(player.id);
+                });
+                tokensLayer.appendChild(token);
+            });
+
+            const ballToken = document.createElement('div');
+            ballToken.className = 'tactical-token ball-token';
+            ballToken.style.left = `${state.ball.x}%`;
+            ballToken.style.top = `${state.ball.y}%`;
+            ballToken.innerHTML = `<div class="token-circle"><i class="fa-solid fa-futbol text-slate-900 text-[10px]"></i></div>`;
+            
+            setupDragEvents(ballToken, 'ball', 'ball');
+            tokensLayer.appendChild(ballToken);
+        }
+
+        function renderSquadLists() {
+            const fieldList = document.getElementById('field-players-list');
+            const benchList = document.getElementById('bench-players-list');
+
+            fieldList.innerHTML = '';
+            benchList.innerHTML = '';
+
+            const onFieldPlayers = state.players.filter(p => p.onField);
+            const benchPlayers = state.players.filter(p => !p.onField);
+
+            document.getElementById('count-field').innerText = onFieldPlayers.length;
+            document.getElementById('count-bench').innerText = benchPlayers.length;
+
+            onFieldPlayers.forEach(p => fieldList.appendChild(createSquadItem(p)));
+            benchPlayers.forEach(p => benchList.appendChild(createSquadItem(p)));
+        }
+
+        function createSquadItem(player) {
+            const div = document.createElement('div');
+            div.className = 'flex items-center justify-between p-2 rounded-lg bg-slate-700/60 border border-slate-600/50 hover:bg-slate-700 text-xs transition';
+            div.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <span class="w-6 h-6 rounded-full flex items-center justify-center font-bold text-white text-[10px]" style="background-color: ${player.color}">
+                        ${player.number}
+                    </span>
+                    <div>
+                        <p class="font-semibold text-slate-200 text-xs">${player.name}</p>
+                        <p class="text-[9px] text-slate-400">${player.role || 'Jogador'}</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-1">
+                    <button class="btn-toggle-field text-slate-400 hover:text-emerald-400 p-1.5 btn-touch" title="${player.onField ? 'Mover para o Banco' : 'Colocar em Campo'}">
+                        <i class="fa-solid ${player.onField ? 'fa-arrow-down' : 'fa-arrow-up'}"></i>
+                    </button>
+                    <button class="btn-edit-p text-slate-400 hover:text-white p-1.5 btn-touch" title="Editar Jogador">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                </div>
+            `;
+
+            div.querySelector('.btn-toggle-field').onclick = (e) => {
+                e.stopPropagation();
+                player.onField = !player.onField;
+                if (player.onField && (!player.x || !player.y)) {
+                    player.x = 50; player.y = 50;
+                }
+                saveAndRefresh();
+            };
+
+            div.querySelector('.btn-edit-p').onclick = (e) => {
+                e.stopPropagation();
+                openPlayerModal(player.id);
+            };
+
+            return div;
+        }
+
+        function setupDragEvents(element, id, type) {
+            let isDragging = false;
+
+            const onPointerDown = (e) => {
+                if (state.drawTool !== 'none') return;
+                isDragging = true;
+                element.setPointerCapture(e.pointerId);
+                e.preventDefault();
+                e.stopPropagation();
+            };
+
+            const onPointerMove = (e) => {
+                if (!isDragging) return;
+
+                const rect = pitchContainer.getBoundingClientRect();
+                let xPercent = ((e.clientX - rect.left) / rect.width) * 100;
+                let yPercent = ((e.clientY - rect.top) / rect.height) * 100;
+
+                xPercent = Math.max(3, Math.min(97, xPercent));
+                yPercent = Math.max(2, Math.min(98, yPercent));
+
+                if (type === 'player') {
+                    const player = state.players.find(p => String(p.id) === String(id));
+                    if (player) {
+                        player.x = Math.round(xPercent * 10) / 10;
+                        player.y = Math.round(yPercent * 10) / 10;
+                        element.style.left = `${player.x}%`;
+                        element.style.top = `${player.y}%`;
+                    }
+                } else if (type === 'ball') {
+                    state.ball.x = Math.round(xPercent * 10) / 10;
+                    state.ball.y = Math.round(yPercent * 10) / 10;
+                    element.style.left = `${state.ball.x}%`;
+                    element.style.top = `${state.ball.y}%`;
+                }
+            };
+
+            const onPointerUp = (e) => {
+                if (!isDragging) return;
+                isDragging = false;
+                try { element.releasePointerCapture(e.pointerId); } catch(err){}
+                updateCurrentFrameData();
+                saveToStorage();
+            };
+
+            element.onpointerdown = onPointerDown;
+            element.onpointermove = onPointerMove;
+            element.onpointerup = onPointerUp;
+            element.onpointercancel = onPointerUp;
+        }
+
+        let isDrawing = false;
+        let drawStartPos = { x: 0, y: 0 };
+        let currentPath = [];
+
+        function setupDrawingLayer() {
+            drawCanvas.onpointerdown = (e) => {
+                if (state.drawTool === 'none') return;
+                isDrawing = true;
+                try { drawCanvas.setPointerCapture(e.pointerId); } catch(err){}
+                e.preventDefault();
+                e.stopPropagation();
+
+                const rect = drawCanvas.getBoundingClientRect();
+                drawStartPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+                currentPath = [drawStartPos];
+            };
+
+            drawCanvas.onpointermove = (e) => {
+                if (!isDrawing || state.drawTool === 'none') return;
+                e.preventDefault();
+
+                const rect = drawCanvas.getBoundingClientRect();
+                const currentPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+
+                redrawAllCanvas();
+
+                ctx.strokeStyle = state.drawColor;
+                ctx.fillStyle = state.drawColor;
+                ctx.lineWidth = 3;
+
+                if (state.drawTool === 'brush') {
+                    currentPath.push(currentPos);
+                    drawFreehandPath(currentPath);
+                } else if (state.drawTool === 'arrow') {
+                    drawArrow(ctx, drawStartPos.x, drawStartPos.y, currentPos.x, currentPos.y);
+                } else if (state.drawTool === 'line') {
+                    drawLine(ctx, drawStartPos.x, drawStartPos.y, currentPos.x, currentPos.y);
+                } else if (state.drawTool === 'rect') {
+                    ctx.strokeRect(drawStartPos.x, drawStartPos.y, currentPos.x - drawStartPos.x, currentPos.y - drawStartPos.y);
+                } else if (state.drawTool === 'circle') {
+                    const r = Math.hypot(currentPos.x - drawStartPos.x, currentPos.y - drawStartPos.y);
+                    ctx.beginPath();
+                    ctx.arc(drawStartPos.x, drawStartPos.y, r, 0, 2 * Math.PI);
+                    ctx.stroke();
+                }
+            };
+
+            const finishDrawing = (e) => {
+                if (!isDrawing || state.drawTool === 'none') return;
+                isDrawing = false;
+                try { drawCanvas.releasePointerCapture(e.pointerId); } catch(err){}
+
+                const rect = drawCanvas.getBoundingClientRect();
+                const endPos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+
+                state.drawings.push({
+                    tool: state.drawTool,
+                    color: state.drawColor,
+                    start: { x: drawStartPos.x / rect.width, y: drawStartPos.y / rect.height },
+                    end: { x: endPos.x / rect.width, y: endPos.y / rect.height },
+                    path: currentPath.map(p => ({ x: p.x / rect.width, y: p.y / rect.height }))
+                });
+
+                redrawAllCanvas();
+                saveToStorage();
+            };
+
+            drawCanvas.onpointerup = finishDrawing;
+            drawCanvas.onpointercancel = finishDrawing;
+        }
+
+        function setDrawingTool(toolName) {
+            state.drawTool = toolName;
+            updateDrawingToolsUI();
+
+            if (toolName === 'none') {
+                drawCanvas.style.pointerEvents = 'none';
+                drawCanvas.classList.remove('z-20');
+                drawCanvas.classList.add('z-0');
+            } else {
+                drawCanvas.style.pointerEvents = 'auto';
+                drawCanvas.classList.remove('z-0');
+                drawCanvas.classList.add('z-20');
+            }
+        }
+
+        function updateDrawingToolsUI() {
+            document.querySelectorAll('.btn-draw-tool').forEach(btn => {
+                const tool = btn.dataset.tool;
+                if (tool === state.drawTool) {
+                    btn.classList.remove('bg-slate-700', 'text-slate-300');
+                    btn.classList.add('bg-emerald-600', 'text-white');
+                } else {
+                    btn.classList.remove('bg-emerald-600', 'text-white');
+                    btn.classList.add('bg-slate-700', 'text-slate-300');
+                }
+            });
+        }
+
+        function redrawAllCanvas() {
+            ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+            const w = drawCanvas.width;
+            const h = drawCanvas.height;
+
+            state.drawings.forEach(d => {
+                ctx.strokeStyle = d.color;
+                ctx.fillStyle = d.color;
+                ctx.lineWidth = 3;
+
+                const sx = d.start.x * w, sy = d.start.y * h;
+                const ex = d.end.x * w, ey = d.end.y * h;
+
+                if (d.tool === 'arrow') drawArrow(ctx, sx, sy, ex, ey);
+                else if (d.tool === 'line') drawLine(ctx, sx, sy, ex, ey);
+                else if (d.tool === 'brush') drawFreehandPath(d.path.map(p => ({ x: p.x * w, y: p.y * h })));
+                else if (d.tool === 'rect') ctx.strokeRect(sx, sy, ex - sx, ey - sy);
+                else if (d.tool === 'circle') {
+                    const r = Math.hypot(ex - sx, ey - sy);
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, r, 0, 2 * Math.PI);
+                    ctx.stroke();
+                }
+            });
+        }
+
+        function drawLine(ctx, x1, y1, x2, y2) {
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+        }
+
+        function drawArrow(ctx, x1, y1, x2, y2) {
+            const headlen = 10;
+            const angle = Math.atan2(y2 - y1, x2 - x1);
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(x2, y2);
+            ctx.lineTo(x2 - headlen * Math.cos(angle - Math.PI / 6), y2 - headlen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(x2 - headlen * Math.cos(angle + Math.PI / 6), y2 - headlen * Math.sin(angle + Math.PI / 6));
+            ctx.lineTo(x2, y2);
+            ctx.fill();
+        }
+
+        function drawFreehandPath(path) {
+            if (path.length < 2) return;
+            ctx.beginPath();
+            ctx.moveTo(path[0].x, path[0].y);
+            for (let i = 1; i < path.length; i++) {
+                ctx.lineTo(path[i].x, path[i].y);
+            }
+            ctx.stroke();
+        }
+
+        function setTeamSize(size, formationKey = null) {
+            state.teamSize = size;
+            
+            document.querySelectorAll('.btn-squad-size').forEach(btn => {
+                const btnSize = parseInt(btn.dataset.size);
+                const checkIcon = btn.querySelector('.icon-check');
+                if (btnSize === size) {
+                    btn.className = 'btn-squad-size bg-emerald-600 text-white text-xs py-2 px-2.5 rounded-lg border border-emerald-500 font-bold text-left flex items-center justify-between btn-touch';
+                    if (size === 5) btn.classList.add('col-span-2');
+                    checkIcon.classList.remove('opacity-0');
+                    checkIcon.classList.add('opacity-100');
+                } else {
+                    btn.className = 'btn-squad-size bg-slate-700 text-slate-300 hover:bg-slate-650 text-xs py-2 px-2.5 rounded-lg border border-slate-600 font-bold text-left flex items-center justify-between btn-touch';
+                    if (btnSize === 5) btn.classList.add('col-span-2');
+                    checkIcon.classList.remove('opacity-100');
+                    checkIcon.classList.add('opacity-0');
+                }
+            });
+
+            document.getElementById('txt-current-size').innerText = `${size} Jogadores`;
+
+            const availableFormations = FORMATIONS_DATABASE[size];
+            const firstKey = formationKey || Object.keys(availableFormations)[0];
+
+            updatePresetButtonsUI(firstKey);
+            applyFormation(size, firstKey);
+        }
+
+        function updatePresetButtonsUI(selectedKey = null) {
+            const container = document.getElementById('preset-buttons-container');
+            container.innerHTML = '';
+
+            const formations = FORMATIONS_DATABASE[state.teamSize] || {};
+
+            Object.keys(formations).forEach(key => {
+                const isSelected = (key === selectedKey);
+                const btn = document.createElement('button');
+                btn.className = `btn-preset ${isSelected ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-650'} text-xs py-2 px-2.5 rounded-lg border font-medium text-left btn-touch`;
+                btn.innerText = key;
+                btn.onclick = () => {
+                    updatePresetButtonsUI(key);
+                    applyFormation(state.teamSize, key);
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        function applyFormation(size, key) {
+            const preset = FORMATIONS_DATABASE[size][key];
+            if (!preset) return;
+
+            state.players = preset.map((p, idx) => ({
+                id: 'p_titular_' + idx,
+                name: p.role + ' ' + p.num,
+                number: p.num,
+                role: p.role,
+                foot: 'Direito',
+                color: p.color || (idx === 0 ? '#000000' : '#16a34a'),
+                x: p.x,
+                y: p.y,
+                onField: true,
+                instructions: ''
+            }));
+
+            for (let i = 1; i <= 5; i++) {
+                state.players.push({
+                    id: 'p_bench_' + i,
+                    name: 'Reserva ' + i,
+                    number: size + i,
+                    role: 'Linha',
+                    foot: 'Direito',
+                    color: '#16a34a',
+                    x: 50, y: 50,
+                    onField: false,
+                    instructions: ''
+                });
+            }
+
+            state.ball = { x: 50, y: 50 };
+            state.frames = [];
+            saveCurrentAsFrame();
+        }
+
+        function saveCurrentAsFrame() {
+            const newFrameData = {
+                players: state.players.map(p => ({ id: p.id, x: p.x, y: p.y, onField: p.onField })),
+                ball: { ...state.ball }
+            };
+            state.frames.push(newFrameData);
+            state.currentFrame = state.frames.length - 1;
+            renderFramesUI();
+            saveToStorage();
+        }
+
+        function updateCurrentFrameData() {
+            if (state.frames[state.currentFrame]) {
+                state.frames[state.currentFrame] = {
+                    players: state.players.map(p => ({ id: p.id, x: p.x, y: p.y, onField: p.onField })),
+                    ball: { ...state.ball }
+                };
+            }
+        }
+
+        function loadFrame(idx) {
+            if (!state.frames[idx]) return;
+            state.currentFrame = idx;
+            const frame = state.frames[idx];
+
+            frame.players.forEach(fp => {
+                const p = state.players.find(item => String(item.id) === String(fp.id));
+                if (p) { 
+                    p.x = fp.x; 
+                    p.y = fp.y; 
+                    p.onField = fp.onField; 
+                }
+            });
+
+            state.ball = { ...frame.ball };
+            renderTokens();
+            renderSquadLists();
+            renderFramesUI();
+        }
+
+        function renderFramesUI() {
+            const list = document.getElementById('frames-list');
+            list.innerHTML = '';
+
+            state.frames.forEach((_, idx) => {
+                const btn = document.createElement('button');
+                btn.className = `px-3 py-1.5 rounded-md text-xs font-bold transition btn-touch ${idx === state.currentFrame ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-300'}`;
+                btn.innerText = `Q${idx + 1}`;
+                btn.onclick = () => loadFrame(idx);
+                list.appendChild(btn);
+            });
+
+            document.getElementById('current-frame-idx').innerText = state.currentFrame + 1;
+            document.getElementById('total-frames-idx').innerText = state.frames.length;
+        }
+
+        let animTimer = null;
+        function playAnimation() {
+            if (state.frames.length < 2) return;
+            state.isPlaying = true;
+            document.getElementById('btn-anim-play').innerHTML = `<i class="fa-solid fa-pause text-xs"></i>`;
+
+            let frameIdx = 0;
+            let progress = 0;
+
+            function step() {
+                if (!state.isPlaying) return;
+                progress += 0.03;
+                if (progress >= 1) {
+                    progress = 0;
+                    frameIdx++;
+                    if (frameIdx >= state.frames.length - 1) frameIdx = 0;
+                }
+
+                const sFrame = state.frames[frameIdx];
+                const eFrame = state.frames[frameIdx + 1];
+
+                if (sFrame && eFrame) {
+                    sFrame.players.forEach(sp => {
+                        const ep = eFrame.players.find(p => String(p.id) === String(sp.id));
+                        const player = state.players.find(p => String(p.id) === String(sp.id));
+                        if (ep && player) {
+                            player.x = sp.x + (ep.x - sp.x) * progress;
+                            player.y = sp.y + (ep.y - sp.y) * progress;
+                        }
+                    });
+
+                    state.ball.x = sFrame.ball.x + (eFrame.ball.x - sFrame.ball.x) * progress;
+                    state.ball.y = sFrame.ball.y + (eFrame.ball.y - sFrame.ball.y) * progress;
+                    renderTokens();
+                }
+
+                animTimer = requestAnimationFrame(step);
+            }
+            step();
+        }
+
+        function stopAnimation() {
+            state.isPlaying = false;
+            if (animTimer) cancelAnimationFrame(animTimer);
+            document.getElementById('btn-anim-play').innerHTML = `<i class="fa-solid fa-play text-xs"></i>`;
+            loadFrame(state.currentFrame);
+        }
+
+        function saveBoardToCollection() {
+            const name = prompt('Digite um nome para este Quadro/Jogada:', `Jogada ${state.savedBoards.length + 1}`);
+            if (!name) return;
+
+            const boardData = {
+                id: 'board_' + Date.now(),
+                name: name,
+                date: new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}),
+                pitchType: state.pitchType,
+                teamSize: state.teamSize,
+                players: JSON.parse(JSON.stringify(state.players)),
+                ball: { ...state.ball },
+                drawings: JSON.parse(JSON.stringify(state.drawings)),
+                frames: JSON.parse(JSON.stringify(state.frames))
+            };
+
+            state.savedBoards.push(boardData);
+            saveToStorage();
+            alert('Quadro salvo com sucesso!');
+        }
+
+        function renderSavedBoardsList() {
+            const list = document.getElementById('saved-boards-list');
+            list.innerHTML = '';
+
+            if (state.savedBoards.length === 0) {
+                list.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">Nenhum quadro salvo até o momento.</p>`;
+                return;
+            }
+
+            state.savedBoards.forEach(board => {
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between p-2.5 bg-slate-700/60 border border-slate-600 rounded-xl hover:bg-slate-700 transition';
+                item.innerHTML = `
+                    <div>
+                        <p class="font-bold text-xs text-slate-100">${board.name}</p>
+                        <p class="text-[10px] text-slate-400">${board.date} • ${board.frames ? board.frames.length : 1} Quadro(s)</p>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button class="btn-load-board bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-2.5 py-1.5 rounded-lg btn-touch">
+                            Carregar
+                        </button>
+                        <button class="btn-delete-board text-rose-400 hover:text-rose-300 p-1.5 btn-touch">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+
+                item.querySelector('.btn-load-board').onclick = () => {
+                    loadBoardFromCollection(board.id);
+                    closeModal('modal-saved-boards');
+                };
+
+                item.querySelector('.btn-delete-board').onclick = () => {
+                    if (confirm(`Deseja excluir "${board.name}"?`)) {
+                        state.savedBoards = state.savedBoards.filter(b => b.id !== board.id);
+                        saveToStorage();
+                        renderSavedBoardsList();
+                    }
+                };
+
+                list.appendChild(item);
+            });
+        }
+
+        function loadBoardFromCollection(id) {
+            const board = state.savedBoards.find(b => b.id === id);
+            if (!board) return;
+
+            state.pitchType = board.pitchType || 'full';
+            state.teamSize = board.teamSize || 11;
+            state.players = JSON.parse(JSON.stringify(board.players));
+            state.ball = { ...board.ball };
+            state.drawings = JSON.parse(JSON.stringify(board.drawings || []));
+            state.frames = JSON.parse(JSON.stringify(board.frames || []));
+            state.currentFrame = 0;
+
+            document.getElementById('select-pitch-type').value = state.pitchType;
+            renderPitchSVG();
+            updatePresetButtonsUI();
+            redrawAllCanvas();
+            renderTokens();
+            renderSquadLists();
+            renderFramesUI();
+            saveToStorage();
+        }
+
+        function openPlayerModal(id) {
+            const player = state.players.find(p => String(p.id) === String(id));
+            if (!player) return;
+
+            document.getElementById('player-id').value = player.id;
+            document.getElementById('player-name').value = player.name || '';
+            document.getElementById('player-number').value = player.number || 1;
+            document.getElementById('player-role').value = player.role || 'Meio-Campo';
+            document.getElementById('player-foot').value = player.foot || 'Direito';
+            document.getElementById('player-instructions').value = player.instructions || '';
+
+            document.querySelectorAll('input[name="team-color"]').forEach(r => {
+                r.checked = (r.value === player.color);
+            });
+
+            document.getElementById('modal-player').classList.remove('hidden');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        function saveToStorage() {
+            try {
+                localStorage.setItem('tactical_board_v5', JSON.stringify({
+                    pitchType: state.pitchType,
+                    teamSize: state.teamSize,
+                    players: state.players,
+                    ball: state.ball,
+                    drawings: state.drawings,
+                    frames: state.frames,
+                    savedBoards: state.savedBoards
+                }));
+            } catch(e){}
+        }
+
+        function loadFromStorage() {
+            try {
+                const data = localStorage.getItem('tactical_board_v5');
+                if (data) {
+                    const parsed = JSON.parse(data);
+                    state.pitchType = parsed.pitchType || 'full';
+                    state.teamSize = parsed.teamSize || 11;
+                    state.players = parsed.players || [];
+                    state.ball = parsed.ball || { x: 50, y: 50 };
+                    state.drawings = parsed.drawings || [];
+                    state.frames = parsed.frames || [];
+                    state.savedBoards = parsed.savedBoards || [];
+                    document.getElementById('select-pitch-type').value = state.pitchType;
+                }
+            } catch(e){}
+        }
+
+        function saveAndRefresh() {
+            renderTokens();
+            renderSquadLists();
+            updateCurrentFrameData();
+            saveToStorage();
+        }
+
+        function setupEventListeners() {
+            const optionsBtn = document.getElementById('btn-options-menu');
+            const dropdownOptions = document.getElementById('dropdown-options');
+
+            optionsBtn.onclick = (e) => {
+                e.stopPropagation();
+                dropdownOptions.classList.toggle('hidden');
+            };
+
+            document.addEventListener('click', (e) => {
+                if (!dropdownOptions.contains(e.target) && e.target !== optionsBtn) {
+                    dropdownOptions.classList.add('hidden');
+                }
+            });
+
+            document.getElementById('btn-menu-save-board').onclick = () => {
+                dropdownOptions.classList.add('hidden');
+                saveBoardToCollection();
+            };
+
+            document.getElementById('btn-menu-view-saved').onclick = () => {
+                dropdownOptions.classList.add('hidden');
+                renderSavedBoardsList();
+                document.getElementById('modal-saved-boards').classList.remove('hidden');
+            };
+
+            document.getElementById('select-pitch-type').onchange = (e) => {
+                state.pitchType = e.target.value;
+                renderPitchSVG();
+                saveToStorage();
+            };
+
+            document.querySelectorAll('.btn-squad-size').forEach(btn => {
+                btn.onclick = () => {
+                    const size = parseInt(btn.dataset.size);
+                    setTeamSize(size);
+                };
+            });
+
+            document.querySelectorAll('.tab-btn, .mobile-nav-btn').forEach(btn => {
+                btn.onclick = () => {
+                    const tab = btn.dataset.tab || btn.dataset.mobileTab;
+                    if (!tab) return;
+
+                    document.getElementById('sidebar-left').classList.remove('translate-y-full');
+
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+                    document.getElementById(`tab-${tab}`).classList.remove('hidden');
+
+                    document.querySelectorAll('.tab-btn').forEach(b => {
+                        b.classList.remove('bg-emerald-600', 'text-white', 'border-emerald-500');
+                        b.classList.add('text-slate-400', 'border-transparent');
+                    });
+                    
+                    const activeBtn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+                    if (activeBtn) {
+                        activeBtn.classList.remove('text-slate-400', 'border-transparent');
+                        activeBtn.classList.add('bg-emerald-600', 'text-white', 'border-emerald-500');
+                    }
+
+                    updateDrawingToolsUI();
+                };
+            });
+
+            document.getElementById('btn-mobile-toggle-panel').onclick = () => {
+                document.getElementById('sidebar-left').classList.toggle('translate-y-full');
+            };
+
+            document.getElementById('btn-close-mobile-panel').onclick = () => {
+                document.getElementById('sidebar-left').classList.add('translate-y-full');
+            };
+
+            document.getElementById('btn-reset-ball').onclick = () => {
+                state.ball = { x: 50, y: 50 };
+                saveAndRefresh();
+            };
+
+            document.querySelectorAll('.btn-draw-tool').forEach(btn => {
+                btn.onclick = () => {
+                    setDrawingTool(btn.dataset.tool);
+                };
+            });
+
+            document.querySelectorAll('.btn-color-pick').forEach(btn => {
+                btn.onclick = () => {
+                    document.querySelectorAll('.btn-color-pick').forEach(b => b.classList.remove('ring-2', 'ring-white'));
+                    btn.classList.add('ring-2', 'ring-white');
+                    state.drawColor = btn.dataset.color;
+                };
+            });
+
+            document.getElementById('btn-draw-undo').onclick = () => {
+                state.drawings.pop();
+                redrawAllCanvas();
+                saveToStorage();
+            };
+
+            document.getElementById('btn-draw-clear').onclick = () => {
+                state.drawings = [];
+                redrawAllCanvas();
+                saveToStorage();
+            };
+
+            document.getElementById('btn-add-player').onclick = () => {
+                const p = {
+                    id: 'p_' + Date.now(),
+                    name: 'Novo Jogador',
+                    number: state.players.length + 1,
+                    role: 'Meio-Campo',
+                    foot: 'Direito',
+                    color: '#16a34a',
+                    x: 50, y: 50,
+                    onField: false,
+                    instructions: ''
+                };
+                state.players.push(p);
+                saveAndRefresh();
+                openPlayerModal(p.id);
+            };
+
+            document.getElementById('form-player').onsubmit = (e) => {
+                e.preventDefault();
+                const id = document.getElementById('player-id').value;
+                const player = state.players.find(p => String(p.id) === String(id));
+                if (player) {
+                    player.name = document.getElementById('player-name').value;
+                    player.number = parseInt(document.getElementById('player-number').value);
+                    player.role = document.getElementById('player-role').value;
+                    player.foot = document.getElementById('player-foot').value;
+                    player.instructions = document.getElementById('player-instructions').value;
+                    
+                    const checkedColor = document.querySelector('input[name="team-color"]:checked');
+                    if (checkedColor) player.color = checkedColor.value;
+
+                    saveAndRefresh();
+                }
+                closeModal('modal-player');
+            };
+
+            document.getElementById('btn-delete-player').onclick = () => {
+                const id = document.getElementById('player-id').value;
+                state.players = state.players.filter(p => String(p.id) !== String(id));
+                saveAndRefresh();
+                closeModal('modal-player');
+            };
+
+            document.querySelectorAll('.btn-close-modal').forEach(b => {
+                b.onclick = () => {
+                    closeModal('modal-player');
+                    closeModal('modal-export');
+                    closeModal('modal-saved-boards');
+                };
+            });
+
+            document.getElementById('btn-open-export').onclick = () => {
+                document.getElementById('modal-export').classList.remove('hidden');
+            };
+
+            document.getElementById('btn-export-png').onclick = () => {
+                const exportCanvas = document.createElement('canvas');
+                const rect = pitchContainer.getBoundingClientRect();
+                exportCanvas.width = rect.width * 2;
+                exportCanvas.height = rect.height * 2;
+                const expCtx = exportCanvas.getContext('2d');
+
+                expCtx.fillStyle = "#123317";
+                expCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+                expCtx.drawImage(drawCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
+
+                state.players.filter(p => p.onField).forEach(p => {
+                    const cx = (p.x / 100) * exportCanvas.width;
+                    const cy = (p.y / 100) * exportCanvas.height;
+
+                    expCtx.beginPath();
+                    expCtx.arc(cx, cy, 22, 0, Math.PI * 2);
+                    expCtx.fillStyle = p.color || '#16a34a';
+                    expCtx.fill();
+                    expCtx.strokeStyle = '#ffffff';
+                    expCtx.lineWidth = 3;
+                    expCtx.stroke();
+
+                    expCtx.fillStyle = '#ffffff';
+                    expCtx.font = 'bold 16px sans-serif';
+                    expCtx.textAlign = 'center';
+                    expCtx.textBaseline = 'middle';
+                    expCtx.fillText(p.number, cx, cy);
+                });
+
+                const link = document.createElement('a');
+                link.download = `prancheta-fito-fc-${Date.now()}.png`;
+                link.href = exportCanvas.toDataURL('image/png');
+                link.click();
+            };
+
+            // EXPORTAÇÃO JSON OTIMIZADA PARA NAVEGADORES
+            document.getElementById('btn-export-json').onclick = () => {
+                const dataStr = JSON.stringify(state, null, 2);
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `tatica-fito-fc-${Date.now()}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            };
+
+            document.getElementById('file-import-json').onchange = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const parsed = JSON.parse(event.target.result);
+                        if (parsed.players) {
+                            state.pitchType = parsed.pitchType || 'full';
+                            state.teamSize = parsed.teamSize || 11;
+                            state.players = parsed.players;
+                            state.ball = parsed.ball || { x: 50, y: 50 };
+                            state.drawings = parsed.drawings || [];
+                            state.frames = parsed.frames || [];
+                            state.savedBoards = parsed.savedBoards || [];
+                            document.getElementById('select-pitch-type').value = state.pitchType;
+                            renderPitchSVG();
+                            updatePresetButtonsUI();
+                            redrawAllCanvas();
+                            saveAndRefresh();
+                            closeModal('modal-export');
+                        }
+                    } catch(err) { alert('Arquivo JSON inválido.'); }
+                };
+                reader.readAsText(file);
+            };
+
+            document.getElementById('btn-anim-play').onclick = () => {
+                if (state.isPlaying) stopAnimation();
+                else playAnimation();
+            };
+
+            document.getElementById('btn-anim-add-frame').onclick = () => {
+                saveCurrentAsFrame();
+            };
+        }
+
+        // REGISTRO DE PWA OTIMIZADO PARA GITHUB PAGES (Caminhos Relativos)
+        function registerPWA() {
+            const manifest = {
+                name: "Prancheta Fito FC",
+                short_name: "Fito FC",
+                start_url: "./index.html",
+                display: "standalone",
+                background_color: "#0f172a",
+                theme_color: "#0f172a",
+                icons: [
+                    { src: "https://placehold.co/192x192/10b981/ffffff?text=FitoFC", sizes: "192x192", type: "image/png" },
+                    { src: "https://placehold.co/512x512/10b981/ffffff?text=FitoFC", sizes: "512x512", type: "image/png" }
+                ]
+            };
+
+            const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+            const link = document.createElement('link');
+            link.rel = 'manifest';
+            link.href = URL.createObjectURL(manifestBlob);
+            document.head.appendChild(link);
+
+            if ('serviceWorker' in navigator) {
+                const swCode = `
+                    const CACHE = 'tatica-fito-fc-v4';
+                    self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./', './index.html']))));
+                    self.addEventListener('fetch', e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))));
+                `;
+                const swBlob = new Blob([swCode], { type: 'application/javascript' });
+                navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(()=>{});
+            }
+
+            let deferredPrompt;
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredPrompt = e;
+                const btnInstall = document.getElementById('btn-pwa-install');
+                btnInstall.classList.remove('hidden');
+                btnInstall.onclick = () => {
+                    btnInstall.classList.add('hidden');
+                    deferredPrompt.prompt();
+                };
+            });
+        }
+    </script>
+</body>
+</html>
