@@ -29,7 +29,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        /* Previne rolagem da página e gestos durante o toque/arraste */
         html, body {
             touch-action: none;
             overscroll-behavior: none;
@@ -45,7 +44,6 @@
             overflow: hidden;
         }
 
-        /* Container do Campo Vertical */
         .pitch-wrapper {
             width: 100%;
             height: 100%;
@@ -72,7 +70,6 @@
             touch-action: none;
         }
 
-        /* Listras da Grama */
         .pitch-stripes {
             position: absolute;
             inset: 0;
@@ -89,7 +86,6 @@
             background-color: #ffffff;
         }
 
-        /* Tokens de Jogadores e Bola */
         .tactical-token {
             position: absolute;
             transform: translate(-50%, -50%);
@@ -552,7 +548,7 @@
         </div>
     </div>
 
-    <!-- SCRIPT PRINCIPAL -->
+    <!-- SCRIPT PRINCIPAL CORRIGIDO -->
     <script>
         const state = {
             pitchType: 'full',
@@ -781,7 +777,8 @@
             setupEventListeners();
             setupDrawingLayer();
 
-            if (state.players.length === 0) {
+            // CORREÇÃO DE INICIALIZAÇÃO: Aplica a formação se a lista estiver vazia
+            if (!state.players || state.players.length === 0) {
                 setTeamSize(11, '4-4-2');
             } else {
                 updatePresetButtonsUI();
@@ -789,7 +786,7 @@
                 renderSquadLists();
             }
 
-            if (state.frames.length === 0) {
+            if (!state.frames || state.frames.length === 0) {
                 saveCurrentAsFrame();
             } else {
                 renderFramesUI();
@@ -1236,6 +1233,7 @@
             state.ball = { x: 50, y: 50 };
             state.frames = [];
             saveCurrentAsFrame();
+            saveAndRefresh();
         }
 
         function saveCurrentAsFrame() {
@@ -1683,7 +1681,6 @@
                 link.click();
             };
 
-            // EXPORTAÇÃO JSON OTIMIZADA PARA NAVEGADORES
             document.getElementById('btn-export-json').onclick = () => {
                 const dataStr = JSON.stringify(state, null, 2);
                 const blob = new Blob([dataStr], { type: "application/json" });
@@ -1735,7 +1732,6 @@
             };
         }
 
-        // REGISTRO DE PWA OTIMIZADO PARA GITHUB PAGES (Caminhos Relativos)
         function registerPWA() {
             const manifest = {
                 name: "Prancheta Fito FC",
@@ -1758,7 +1754,7 @@
 
             if ('serviceWorker' in navigator) {
                 const swCode = `
-                    const CACHE = 'tatica-fito-fc-v4';
+                    const CACHE = 'tatica-fito-fc-v5';
                     self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./', './index.html']))));
                     self.addEventListener('fetch', e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))));
                 `;
